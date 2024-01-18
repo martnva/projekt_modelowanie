@@ -143,14 +143,6 @@ if __name__ == "__main__":
                 )
             )
         ),
-        "maska": {
-            "A1": 1,
-            "A2": 1,
-            "A3": 1,
-            "A4": 1,
-            "A5": 1,
-            "A6": 0
-        },
         "window_temp": lambda t: 280 - 10 * np.sin(24 * t / 3600),
         "diffusion": 0.1,
         "current_time": 0.0
