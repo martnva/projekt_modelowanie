@@ -7,6 +7,8 @@ class apartment:
         self.result_matrix = np.zeros((100,100))
         self.mask_matrix = np.zeros((100,100))
         self.build_partial_matrix()
+        self.build_result_matrix()
+        self.draw_heatmap()
 
     def build_partial_matrix(self):
         for room in self.params["rooms"].keys():
