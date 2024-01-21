@@ -1,39 +1,100 @@
 import numpy as np
 import matplotlib.pyplot as plt
-class apartment:
+from matplotlib.colors import ListedColormap
+
+class Heating_model:
     def __init__(self, params: dict):
         self.params = params
         self.partial_matrix = {}
         self.result_matrix = np.zeros((100,100))
         self.mask_matrix = np.zeros((100,100))
+        self.indx = {"windows": 1, "walls": 2, "doors": 3, "radiators": 5}
         self.build_partial_matrix()
+        self.build_result_matrix()
+        self.draw_heatmap()
 
     def build_partial_matrix(self):
         for room in self.params["rooms"].keys():
             coordinates = self.params["rooms"][room]
             self.partial_matrix[room] = np.zeros((coordinates["row_max"]-coordinates["row_min"], coordinates["col_max"]-coordinates["col_min"]))
+            self.partial_matrix[room][:] = coordinates["init_func"](self.partial_matrix[room])
+
+    def build_result_matrix(self):
+        for room in self.params["rooms"].keys():
+            coordinates = self.params["rooms"][room]
+            self.result_matrix[coordinates["row_min"]:coordinates["row_max"],coordinates["col_min"]:coordinates["col_max"]] = self.partial_matrix[room]
+    def evolve_in_unit_timestep(self, dt: float):
+        force_term_full = self.params["force_term"](self.params["domain"]["grid"],
+                                                     self.params["current_time"],
+                                                     self.mask_matrix)
+        for key in self.params["windows"].keys():
+            self.result_matrix[
+                self.params["windows"][key]["row_min"]: self.params["windows"][key]["row_max"],
+                self.params["windows"][key]["col_min"]: self.params["windows"][key]["col_max"]
+            ] = self.params["window_temp"](self.params["current_time"])
+        self.build_partial_matrix()
+        for key in self.params["doors"].keys():
+            self.result_matrix[
+            self.params["windows"][key]["row_min"]: self.params["windows"][key]["row_max"],
+            self.params["windows"][key]["col_min"]: self.params["windows"][key]["col_max"]
+            ] = self.params["window_temp"](self.params["current_time"])
+        self.build_partial_matrix()
+        for key in self.params["rooms"].keys():
+            self.result_matrix[
+            self.params["windows"][key]["row_min"]: self.params["windows"][key]["row_max"],
+            self.params["windows"][key]["col_min"]: self.params["windows"][key]["col_max"]
+            ] = self.params["window_temp"](self.params["current_time"])
+        self.build_result_matrix()
+
+        self.params["current_time"] += dt
+        return self
+
+    def evolve(self, n_steps: int, dt: float):
+        for _ in tqdm.tqdm(range(n_steps), desc="TIME STEPS"):
+            self.evolve_in_unit_timestep(dt)
+        return self
+
+    def draw_heatmap(self):
+        return self.result_matrix
+
+def draw_houses(object_house):
+    for key, val in object_house.params['rooms'].items():
+        object_house.partial_matrix[key] = np.zeros((val['row_max'] - val['row_min'], val['col_max'] - val['col_min']))
+        mask = object_house.params["masks"][key]
+        object_house.partial_matrix[key][mask == 1] = 4
+        object_house.result_matrix[val['row_min']:val['row_max'], val['col_min']:val['col_max']] = object_house.partial_matrix[key]
+    for v in object_house.indx:
+        for key, val in object_house.params[v].items():
+            object_house.result_matrix[val['row_min']:val['row_max'], val['col_min']:val['col_max']] = object_house.indx[v]
+    return object_house
 
 
 if __name__ == "__main__":
     model_parameters = {
         "rooms": {
             "A1": {
-                "row_min": 0, "row_max": 60, "col_min": 0, "col_max": 50
+                "row_min": 0, "row_max": 60, "col_min": 0, "col_max": 50,
+                "init_func": lambda x: 298 + np.random.random(x.shape)
             },
             "A2": {
-                "row_min": 0, "row_max": 60, "col_min": 50, "col_max": 62
+                "row_min": 0, "row_max": 60, "col_min": 50, "col_max": 62,
+                "init_func": lambda x: 294 + np.random.random(x.shape)
             },
             "A3": {
-                "row_min": 0, "row_max": 50, "col_min": 62, "col_max": 100
+                "row_min": 0, "row_max": 45, "col_min": 62, "col_max": 100,
+                "init_func": lambda x: 285 + np.random.random(x.shape)
             },
             "A4": {
-                "row_min": 60, "row_max": 100, "col_min": 0, "col_max": 57
+                "row_min": 60, "row_max": 100, "col_min": 0, "col_max": 57,
+                "init_func": lambda x: 296 + np.random.random(x.shape)
             },
             "A5": {
-                "row_min": 60, "row_max": 100, "col_min": 57, "col_max": 100
+                "row_min": 60, "row_max": 100, "col_min": 57, "col_max": 100,
+                "init_func": lambda x: 297 + np.random.random(x.shape)
             },
             "A6": {
-                "row_min": 50, "row_max": 60, "col_min": 62, "col_max": 100
+                "row_min": 45, "row_max": 60, "col_min": 62, "col_max": 100,
+                "init_func": lambda x: 295 + np.random.random(x.shape)
             }
         },
         "doors": {
@@ -99,7 +160,7 @@ if __name__ == "__main__":
                 "row_min": 35, "row_max": 53, "col_min": 60, "col_max": 62
             },
             "R11": {
-                "row_min": 50, "row_max": 52, "col_min": 62, "col_max": 98
+                "row_min": 45, "row_max": 47, "col_min": 62, "col_max": 98
             },
             "R12": {
                 "row_min": 60, "row_max": 62, "col_min": 62, "col_max": 98
@@ -134,24 +195,35 @@ if __name__ == "__main__":
         "domain": {
             "grid": np.meshgrid(np.linspace(-1, 1, 101), np.linspace(-1, 1, 101))[0], "dx": 1
         },
-        "force_term": lambda x, t, mask: np.where(
+        "masks1": lambda x, t, mask: np.where(
             mask == 1, (np.sin(24 * t / 3600) ** 2 + 2) / 10, np.where(
                 mask == 2, (np.sin(24 * t / 3600) ** 2 + 1) / 10, np.where(
-                    mask == 3, (np.sin(24 * t / 3600) ** 2 + 1) / 10, np.where(
-                        mask == 4, (np.sin(24 * t / 3600) ** 2 + 1) / 10, 0
-                    )
+                    mask == 3, (np.sin(24 * t / 3600) ** 2 + 1) / 10, 0
                 )
             )
         ),
-        "maska": {
+        "masks": {
             "A1": 1,
             "A2": 1,
-            "A3": 1,
+            "A3": 0,
             "A4": 1,
             "A5": 1,
-            "A6": 0
+            "A6": 1
         },
         "window_temp": lambda t: 280 - 10 * np.sin(24 * t / 3600),
         "diffusion": 0.1,
         "current_time": 0.0
     }
+
+    cmap = ListedColormap(['white', 'lightskyblue', 'black', 'peachpuff', 'floralwhite', 'crimson'])
+    model = Heating_model(model_parameters)
+    model_c = Heating_model(model_parameters)
+
+    draw_house = draw_houses(model_c)
+    plt.imshow(draw_house.result_matrix, cmap=cmap)
+    plt.show()
+
+    plt.imshow(model.draw_heatmap(), cmap=plt.get_cmap("coolwarm"))
+    plt.title(f"t = {model.params['current_time']}")
+    plt.colorbar().set_label("Temperature[K]")
+    plt.show()
